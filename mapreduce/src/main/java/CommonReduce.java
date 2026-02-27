@@ -23,17 +23,24 @@ public class CommonReduce {
             String tempFile = CommonFile.mrTempFile(i, id);
             Stream<String> stream = FileUtil.stream(tempFile);
             if (stream == null) {
-                return;
+                continue;
             }
             stream.forEach(
                 s -> {
-                    KeyValue keyValue = JSON.parseObject(
-                        new String(s.getBytes(StandardCharsets.UTF_8)),
-                        KeyValue.class);
-                    List<String> keyValues = kvsMap.getOrDefault(keyValue.getKey(),
-                        new ArrayList<>());
-                    keyValues.add(keyValue.getValue());
-                    kvsMap.put(keyValue.getKey(), keyValues);
+                    if (s == null || s.trim().isEmpty()) {
+                        return;
+                    }
+                    try {
+                        KeyValue keyValue = JSON.parseObject(
+                            new String(s.getBytes(StandardCharsets.UTF_8)),
+                            KeyValue.class);
+                        List<String> keyValues = kvsMap.getOrDefault(keyValue.getKey(),
+                            new ArrayList<>());
+                        keyValues.add(keyValue.getValue());
+                        kvsMap.put(keyValue.getKey(), keyValues);
+                    } catch (Exception e) {
+                        LogUtil.log("Failed to parse JSON: " + s);
+                    }
                 });
         }
         List<String> keys = new ArrayList<>(kvsMap.keySet()).stream().sorted(String::compareTo)
