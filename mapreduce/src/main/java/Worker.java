@@ -19,7 +19,7 @@ public class Worker extends RpcNode {
 
     public void work(MapFunc mapFunc, ReduceFunc reduceFunc) {
         MRArg mrArg = requireTask(getPort());
-        while (mrArg.getWorkerId() != null && !mrArg.getDone()) {
+        while (mrArg.getWorkerId() != null && !mrArg.getDone() && !Thread.currentThread().isInterrupted()) {
             if (mrArg.getWorkerType().equals(Cons.TASK_TYPE_MAP)) {
                 commonMap.doMap(mapFunc, mrArg.getWorkerId(), mrArg.getJobFile(),
                     mrArg.getReduceNum());
@@ -31,6 +31,10 @@ public class Worker extends RpcNode {
             mrArg = doneTask(mrArg.getWorkerId(), mrArg.getWorkerType(), getPort());
             try {
                 Thread.sleep(50L);
+            } catch (InterruptedException e) {
+                LogUtil.log("Worker interrupted, exiting work loop");
+                Thread.currentThread().interrupt();
+                break;
             } catch (Exception e) {
                 LogUtil.log("not done yet, " + mrArg);
             }
@@ -38,16 +42,34 @@ public class Worker extends RpcNode {
     }
 
     private MRArg requireTask(Integer port) {
-        MRArg arg = JSON.parseObject(
-            call(Cons.MASTER_HOST, "requireTask", new Object[]{port}).toString(),
-            MRArg.class);
-        return arg;
+        Object result = call(Cons.MASTER_HOST, "requireTask", new Object[]{port});
+        if (result == null) {
+            return MRArg.empty(false);
+        }
+        try {
+            MRArg arg = JSON.parseObject(
+                result.toString(),
+                MRArg.class);
+            return arg;
+        } catch (Exception e) {
+            LogUtil.log("Failed to parse MRArg: " + e.getMessage());
+            return MRArg.empty(false);
+        }
     }
 
     private MRArg doneTask(Integer id, Integer type, Integer port) {
-        return JSON.parseObject(
-            call(Cons.MASTER_HOST, "doneTask", new Object[]{id, type, port}).toString(),
-            MRArg.class);
+        Object result = call(Cons.MASTER_HOST, "doneTask", new Object[]{id, type, port});
+        if (result == null) {
+            return MRArg.empty(false);
+        }
+        try {
+            return JSON.parseObject(
+                result.toString(),
+                MRArg.class);
+        } catch (Exception e) {
+            LogUtil.log("Failed to parse MRArg: " + e.getMessage());
+            return MRArg.empty(false);
+        }
     }
 
     public String rpcPing(String param) {

@@ -44,6 +44,20 @@ public class Distributed {
             files.add(CommonFile.reduceOutFile(i));
         }
         CommonFile.mergeReduceOutFiles(files);
+        
+        // 关闭所有Worker
+        shutDownWorkers();
+        // 关闭Master
+        master.shutDownServer();
+    }
+    
+    public void shutDownWorkers() {
+        for (Worker worker : workers) {
+            worker.shutDownServer();
+        }
+        for (Thread thread : workerThreads) {
+            thread.interrupt();
+        }
     }
 
     private Worker newWorker() {

@@ -116,6 +116,12 @@ public class RpcNode {
                 , " resp: ", ret);
 
             return ret;
+        } catch (InterruptedException e) {
+            LogUtil.log("call interrupted, " + e);
+            e.printStackTrace();
+            // 保持线程中断状态
+            Thread.currentThread().interrupt();
+            return null;
         } catch (Exception e) {
             LogUtil.log("fail to call err, " + e);
             e.printStackTrace();
@@ -125,21 +131,25 @@ public class RpcNode {
 
     private void bind(RpcChannel rpcChannel) throws Exception {
         NioEventLoopGroup group = new NioEventLoopGroup();
-        Bootstrap bootstrap = new Bootstrap();
-        bootstrap.group(group)
-            .channel(NioSocketChannel.class)
-            .option(ChannelOption.TCP_NODELAY, true)
-            .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 2000)
-            .handler(new ChannelInitializer<SocketChannel>() {
-                @Override
-                protected void initChannel(SocketChannel socketChannel) {
-                    ChannelPipeline pipeline = socketChannel.pipeline();
-                    pipeline.addFirst(new RpcEncoder(RpcRequest.class, new JSONRpcSerializer()));
-                    pipeline.addLast(new StringDecoder());
-                    pipeline.addLast(rpcChannel);
-                }
-            });
-        bootstrap.connect("127.0.0.1", rpcChannel.getServerPort()).sync();
+        try {
+            Bootstrap bootstrap = new Bootstrap();
+            bootstrap.group(group)
+                .channel(NioSocketChannel.class)
+                .option(ChannelOption.TCP_NODELAY, true)
+                .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 2000)
+                .handler(new ChannelInitializer<SocketChannel>() {
+                    @Override
+                    protected void initChannel(SocketChannel socketChannel) {
+                        ChannelPipeline pipeline = socketChannel.pipeline();
+                        pipeline.addFirst(new RpcEncoder(RpcRequest.class, new JSONRpcSerializer()));
+                        pipeline.addLast(new StringDecoder());
+                        pipeline.addLast(rpcChannel);
+                    }
+                });
+            bootstrap.connect("127.0.0.1", rpcChannel.getServerPort()).sync();
+        } finally {
+            group.shutdownGracefully();
+        }
     }
 
     private int randPort() {
@@ -147,9 +157,10 @@ public class RpcNode {
         return (int) ((Math.random() * (end - start)) + start);
     }
 
-    protected void shutDownServer() {
+    public void shutDownServer() {
         this.bossGroup.shutdownGracefully();
         this.workGroup.shutdownGracefully();
+        this.executorService.shutdown();
     }
 
 }
